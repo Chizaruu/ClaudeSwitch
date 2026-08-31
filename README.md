@@ -49,10 +49,32 @@ Chrome uses for profiles.
 
 ---
 
-## Requirements
+## Install (Windows)
 
-Building needs the **[.NET 10 SDK](https://dotnet.microsoft.com/download)** plus the
-native toolchain NativeAOT uses on each OS:
+Download **`ClaudeSwitch-<version>-x64.msi`** from the
+[latest release](https://github.com/Chizaruu/ClaudeSwitch/releases/latest) and run
+it. It's a **per-user install (no admin)** and needs nothing else installed — it
+drops the `ClaudeRouter` binary in place, registers the login router, creates the
+colored **Claude (Personal)** / **Claude (Work)** shortcuts, starts the background
+watcher, and downloads Claude first if it isn't installed.
+
+> The MSI is currently **unsigned**, so SmartScreen may show "Windows protected your
+> PC" — click **More info → Run anyway**. (Code signing is wired into CI and turns
+> on once a certificate is added.)
+
+Afterwards, right-click each taskbar button → **Pin to taskbar** and unpin any old
+generic Claude icon. To remove it later, use **Settings → Apps** (or `uninstall.bat`).
+
+**Prefer to build from source?** Unzip the repo and double-click `build.bat` — it
+needs the [.NET 10 SDK](https://dotnet.microsoft.com/download) plus the "Desktop
+development with C++" workload (the MSVC linker), and does the same `dotnet publish`
++ `setup` the MSI packages.
+
+## Building (macOS, Linux, or Windows from source)
+
+macOS and Linux build from source (there's no installer for them yet). You need the
+**[.NET 10 SDK](https://dotnet.microsoft.com/download)** plus the native toolchain
+NativeAOT uses:
 
 | OS | Toolchain for NativeAOT |
 | --- | --- |
@@ -61,20 +83,6 @@ native toolchain NativeAOT uses on each OS:
 | **macOS** | the Xcode Command Line Tools (`xcode-select --install`) |
 
 The built binary itself needs **no runtime** on the end-user machine.
-
-## Install (Windows)
-
-1. [Download this repository](https://github.com/Chizaruu/claude-switch/archive/refs/heads/main.zip)
-   (or `git clone`) and unzip it.
-2. **Double-click `build.bat`.**
-
-`build.bat` runs `dotnet publish` to compile `ClaudeRouter.exe` (NativeAOT) for your
-architecture, then runs its `setup`: it makes the two accounts' data folders,
-registers the login router, creates the colored **Claude (Personal)** / **Claude
-(Work)** desktop shortcuts, starts the background watcher, and — if Claude isn't
-installed — downloads and installs it first. Follow the box it shows at the end,
-then right-click each taskbar button → **Pin to taskbar** and unpin any old generic
-Claude icon.
 
 ## Install (macOS)
 
@@ -207,10 +215,13 @@ Release. Ordinary commits that don't change the version are safe — no version 
 no tag, no release. (You can still cut one by hand: `git tag v0.2.0 && git push
 origin v0.2.0`.)
 
-Releases carry **source bundles** (`.zip` + `.tar.gz` + `SHA256SUMS.txt`), not
-prebuilt binaries: you build locally with the .NET SDK (`build.bat` / `install.sh`
-run `dotnet publish`), so nothing ships as an unsigned binary that would trip
-SmartScreen or Gatekeeper.
+Each release carries the **Windows installer** (`ClaudeSwitch-<tag>-x64.msi`, built
+on a Windows runner) plus **source bundles** (`.zip` + `.tar.gz`) for building on
+macOS/Linux, and a `SHA256SUMS.txt` over all of them. The MSI is a prebuilt binary,
+currently **unsigned** — a signing step is wired into the release workflow and
+activates the moment you add a code-signing certificate as repo secrets
+(`WINDOWS_CERT_PFX_BASE64` + `WINDOWS_CERT_PASSWORD`). macOS and Linux still build
+from source with the .NET SDK.
 
 ## Troubleshooting
 
@@ -245,13 +256,15 @@ claude-switch/
 │   ├── WindowsInterop.cs   # Windows-only COM/native interop (source-generated COM)
 │   └── README.md           # architecture notes + why NativeAOT (not MAUI)
 ├── assets/                 # per-OS account icons (.ico / .png / .icns)
+├── installer/              # Windows MSI (WiX): ClaudeSwitch.wxs + License.rtf
 ├── build.bat               # Windows: dotnet publish + install (double-click)
 ├── uninstall.bat           # Windows: one-click removal
 ├── install.sh              # Linux/macOS: dotnet publish + install
 ├── uninstall.sh            # Linux/macOS: one-click removal
 ├── .github/workflows/
-│   ├── build.yml           # NativeAOT publish on Win/macOS/Linux + shellcheck
-│   └── release.yml         # tag-triggered source-bundle releases
+│   ├── build.yml           # NativeAOT publish (Win/macOS/Linux) + MSI check + shellcheck
+│   ├── tag.yml             # auto-tag v<Version> from the csproj on push to main
+│   └── release.yml         # builds the MSI + source bundles, publishes the release
 ├── LICENSE                 # MIT
 ├── README.md
 ├── CONTRIBUTING.md

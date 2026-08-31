@@ -47,6 +47,21 @@ jobs:
         shell: bash
         run: ls -lh src/bin/Release/net10.0/${{ matrix.rid }}/publish/
 
+      # WiX only runs on Windows, so the MSI authoring is validated on the
+      # win-x64 leg (against version 0.0.0 — a real version is stamped at release).
+      - name: Validate MSI authoring (win-x64)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2
+          wix build installer/ClaudeSwitch.wxs `
+            -d Version=0.0.0 `
+            -d PublishDir=src/bin/Release/net10.0/win-x64/publish `
+            -bindpath installer -ext WixToolset.UI.wixext -arch x64 `
+            -o "$env:RUNNER_TEMP/ClaudeSwitch-check.msi"
+          Get-Item "$env:RUNNER_TEMP/ClaudeSwitch-check.msi" | Select-Object Name, Length
+
   shellcheck:
     name: ShellCheck (install/uninstall)
     runs-on: ubuntu-latest

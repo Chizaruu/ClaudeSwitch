@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ClaudeSwitch Windows installer (WiX v5).
+
+  A per-user MSI (no admin) that installs the NativeAOT ClaudeRouter.exe and its
+  icons into %LOCALAPPDATA%\ClaudeRouter — exactly where the engine expects to
+  live — then runs the engine's own `setup` (register the claude:// handler, make
+  the colored account shortcuts, start the watcher, install Claude if needed). On
+  removal it runs `ClaudeRouter uninstall` to undo all of that first.
+
+  Built in CI on a Windows runner (see .github/workflows). Pass:
+    -d Version=<x.y.z>   -d PublishDir=<dir with ClaudeRouter.exe + assets/>
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="ClaudeSwitch"
+           Manufacturer="Abdul-Kadir Coskun"
+           Version="$(Version)"
+           UpgradeCode="7e9c4a6c-5b2d-4e7a-9f1b-2c3d4e5f6a7b"
+           Scope="perUser"
+           Compressed="yes">
+
+    <SummaryInformation Description="ClaudeSwitch — run two Claude Desktop accounts at once" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of ClaudeSwitch is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Add/Remove Programs polish. -->
+    <Icon Id="AppIcon.ico" SourceFile="$(PublishDir)/assets/Personal.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/Chizaruu/ClaudeSwitch" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/Chizaruu/ClaudeSwitch" />
+
+    <!-- Files live under %LOCALAPPDATA%\ClaudeRouter (the engine's own home). -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="ClaudeRouter">
+        <Directory Id="ASSETSFOLDER" Name="assets" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="APPSHORTCUTFOLDER" Name="ClaudeSwitch" />
+    </StandardDirectory>
+
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Component Id="ClaudeRouterExe">
+        <File Id="ClaudeRouterExe" Source="$(PublishDir)/ClaudeRouter.exe" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="IconFiles" Directory="ASSETSFOLDER">
+      <Component Id="PersonalIco">
+        <File Source="$(PublishDir)/assets/Personal.ico" KeyPath="yes" />
+      </Component>
+      <Component Id="WorkIco">
+        <File Source="$(PublishDir)/assets/Work.ico" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="Shortcuts" Directory="APPSHORTCUTFOLDER">
+      <Component Id="SetupShortcut">
+        <Shortcut Id="SetupShortcut"
+                  Name="Set up ClaudeSwitch"
+                  Description="Register the login router and create the account shortcuts"
+                  Target="[INSTALLFOLDER]ClaudeRouter.exe" Arguments="setup"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="APPSHORTCUTFOLDER" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\ClaudeSwitch" Name="installed"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="Main" Title="ClaudeSwitch" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentGroupRef Id="IconFiles" />
+      <ComponentGroupRef Id="Shortcuts" />
+    </Feature>
+
+    <!-- Run the engine's own setup after the files land (async, so a long Claude
+         download doesn't stall the wizard); undo it on removal (wait, so the
+         watcher is stopped and the exe is free before RemoveFiles). -->
+    <CustomAction Id="RunSetup" FileRef="ClaudeRouterExe" ExeCommand="setup"
+                  Execute="deferred" Impersonate="yes" Return="asyncNoWait" />
+    <CustomAction Id="RunUninstall" FileRef="ClaudeRouterExe" ExeCommand="uninstall"
+                  Execute="deferred" Impersonate="yes" Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="RunUninstall" Before="RemoveFiles"
+              Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="RunSetup" After="InstallFiles" Condition="NOT Installed" />
+    </InstallExecuteSequence>
+
+    <!-- A small Welcome → License → Install → Finish wizard. -->
+    <ui:WixUI Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+  </Package>
+</Wix>

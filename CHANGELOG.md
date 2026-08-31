@@ -29,6 +29,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`.zip` + `.tar.gz` + `SHA256SUMS.txt`) — no unsigned prebuilt binaries.
 - **NuGet caching in CI** so the ~570 MB NativeAOT toolchain (ILCompiler + runtime
   packs) is not re-downloaded on every run.
+- **Windows MSI installer** (`installer/ClaudeSwitch.wxs`, WiX v5): a per-user
+  installer (no admin) with a small wizard that installs the native binary into
+  `%LOCALAPPDATA%\ClaudeRouter`, runs the engine's `setup`, and runs `uninstall` on
+  removal. Built on a Windows runner and attached to each release. The release
+  workflow also has a **signing hook** that activates when `WINDOWS_CERT_PFX_BASE64`
+  + `WINDOWS_CERT_PASSWORD` secrets are added (the MSI ships unsigned until then).
 - Per-platform icon assets: `assets/*.png` (Linux) and `assets/*.icns` (macOS),
   generated from the existing `.ico` sources.
 - Open-source project scaffolding: MIT `LICENSE`, `CONTRIBUTING.md`,
@@ -46,6 +52,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Release builds emit no debug symbols (`DebugType=none`), so the published output
   is just the native binary + `assets/` — dropping the ~11 MB `ClaudeRouter.pdb` on
   Windows and the `.dbg` on Unix.
+- Windows is now distributed as a **prebuilt MSI** (a deliberate, Windows-only
+  reversal of the source-only policy); macOS and Linux still build from source.
 - CI builds the NativeAOT binary on Windows, macOS and Linux runners; README,
   CONTRIBUTING and the platform-support table rewritten around the single app, with
   the two inherently best-effort UI details (Linux window grouping, macOS Dock

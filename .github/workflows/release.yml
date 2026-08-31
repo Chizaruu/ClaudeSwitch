@@ -5,11 +5,14 @@ name: Release
 #     (see .github/workflows/tag.yml), or
 #   • manually — push a tag yourself: git tag v0.2.0 && git push origin v0.2.0
 #
-# By design this publishes SOURCE BUNDLES ONLY — no prebuilt binaries. Users
-# build the NativeAOT binary locally (build.bat / install.sh run `dotnet
-# publish`), which keeps every artifact something the user produced themselves
-# rather than an unsigned binary that trips SmartScreen / Gatekeeper. See README
-# "Releases" and CONTRIBUTING.
+# Release assets:
+#   • ClaudeSwitch-<version>-x64.msi  — Windows installer (built on a Windows
+#     runner; per-user, unsigned for now — see the signing hook below), and
+#   • source bundles (.zip + .tar.gz)  — for building on macOS/Linux or auditing,
+#   • SHA256SUMS.txt covering all of the above.
+#
+# The MSI is a prebuilt binary; macOS/Linux still build from source with the .NET
+# SDK (build.bat / install.sh). See README "Releases" and CONTRIBUTING.
 
 on:
   push:
@@ -22,52 +25,135 @@ on:
         type: string
 
 permissions:
-  contents: write # required to create the Release and upload assets
+  contents: write
 
 jobs:
-  source-bundles:
-    name: Build source bundles + Release
+  # Resolve the tag/version once for the other jobs.
+  meta:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.m.outputs.tag }}
+      version: ${{ steps.m.outputs.version }}
     steps:
-      - name: Resolve tag
-        id: t
-        run: echo "tag=${{ inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+      - id: m
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          # MSI ProductVersion must be numeric: strip a leading v and any -suffix.
+          version="${tag#v}"; version="${version%%-*}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
+  windows-msi:
+    needs: meta
+    runs-on: windows-latest
+    env:
+      NUGET_PACKAGES: ${{ github.workspace }}/.nuget-packages
+      # Signing runs only when a cert secret is present (wire it up later).
+      HAS_CERT: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' }}
+    steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ steps.t.outputs.tag }}
+          ref: ${{ needs.meta.outputs.tag }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Cache NuGet packages (incl. the NativeAOT toolchain)
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.nuget-packages
+          key: nuget-Windows-win-x64-${{ hashFiles('src/**/*.csproj') }}
+          restore-keys: |
+            nuget-Windows-win-x64-
 
+      - name: Publish the native binary (win-x64)
+        run: dotnet publish src -c Release -r win-x64
+
+      - name: Build the MSI
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2
+          New-Item -ItemType Directory -Force dist | Out-Null
+          wix build installer/ClaudeSwitch.wxs `
+            -d Version=${{ needs.meta.outputs.version }} `
+            -d PublishDir=src/bin/Release/net10.0/win-x64/publish `
+            -bindpath installer -ext WixToolset.UI.wixext -arch x64 `
+            -o "dist/ClaudeSwitch-${{ needs.meta.outputs.tag }}-x64.msi"
+
+      # --- Signing hook (no-op until you add the two secrets) -----------------
+      # To enable: create repo secrets WINDOWS_CERT_PFX_BASE64 (base64 of your
+      # code-signing .pfx) and WINDOWS_CERT_PASSWORD. Until then this is skipped
+      # and the MSI ships unsigned (SmartScreen warns until it earns reputation).
+      - name: Sign the MSI
+        if: ${{ env.HAS_CERT == 'true' }}
+        shell: pwsh
+        env:
+          PFX_B64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          PFX_PW: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $pfx = "$env:RUNNER_TEMP/cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_B64))
+          $signtool = Get-ChildItem "C:/Program Files (x86)/Windows Kits/10/bin" -Recurse -Filter signtool.exe |
+                      Where-Object { $_.FullName -like '*x64*' } | Select-Object -First 1 -ExpandProperty FullName
+          & $signtool sign /f $pfx /p $env:PFX_PW /fd SHA256 `
+            /tr http://timestamp.digicert.com /td SHA256 `
+            "dist/ClaudeSwitch-${{ needs.meta.outputs.tag }}-x64.msi"
+          Remove-Item $pfx -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi
+          path: dist/*.msi
+
+  source-bundles:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.meta.outputs.tag }}
       - name: Build source archives
-        id: bundle
         run: |
           set -euo pipefail
-          TAG="${{ steps.t.outputs.tag }}"
-          NAME="claude-switch-${TAG}"
+          NAME="claude-switch-${{ needs.meta.outputs.tag }}"
           mkdir -p dist stage/"$NAME"
-          # Everything except VCS metadata and the workflow's own scratch.
           rsync -a --exclude '.git' --exclude 'dist' --exclude 'stage' ./ stage/"$NAME"/
           ( cd stage && zip -r -q "../dist/${NAME}-source.zip" "$NAME" )
           ( cd stage && tar -czf "../dist/${NAME}-source.tar.gz" "$NAME" )
-          ( cd dist && sha256sum ./* > SHA256SUMS.txt )
-          ls -lh dist
-          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: dist/*
 
+  publish:
+    needs: [meta, windows-msi, source-bundles]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: incoming
+      - name: Gather assets + checksums
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find incoming -type f -exec cp {} dist/ \;
+          # Checksum into a temp file first so SHA256SUMS.txt never hashes itself.
+          ( cd dist && sha256sum * > "$RUNNER_TEMP/SHA256SUMS.txt" && mv "$RUNNER_TEMP/SHA256SUMS.txt" . )
+          ls -lh dist
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.t.outputs.tag }}
-          name: ${{ steps.t.outputs.tag }}
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: ${{ needs.meta.outputs.tag }}
           generate_release_notes: true
           body: |
-            **ClaudeSwitch ${{ steps.t.outputs.tag }}** — source bundles.
+            **ClaudeSwitch ${{ needs.meta.outputs.tag }}**
 
-            These are **source archives**, not prebuilt binaries. You'll need the
-            .NET 10 SDK; the scripts build the native binary with `dotnet publish`:
-            - **Windows:** unzip and double-click `build.bat`.
-            - **Linux / macOS:** unzip and run `./install.sh`.
+            - **Windows:** download `ClaudeSwitch-${{ needs.meta.outputs.tag }}-x64.msi` and run it
+              (per-user, no admin). It's currently **unsigned**, so SmartScreen may warn —
+              click **More info → Run anyway**.
+            - **macOS / Linux:** grab a source bundle and run `./install.sh` (needs the .NET 10 SDK).
 
-            Verify with `sha256sum -c SHA256SUMS.txt`.
+            Verify downloads with `sha256sum -c SHA256SUMS.txt`.
           files: |
-            dist/${{ steps.bundle.outputs.name }}-source.zip
-            dist/${{ steps.bundle.outputs.name }}-source.tar.gz
-            dist/SHA256SUMS.txt
+            dist/*

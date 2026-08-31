@@ -6,6 +6,12 @@
 bin/
 obj/
 
+# Installer + release build artifacts
+*.msi
+*.wixpdb
+dist/
+.nuget-packages/
+
 # Local build/install scratch
 router.log
 session-backup-*/
