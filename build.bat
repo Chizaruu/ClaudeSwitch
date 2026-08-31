@@ -1,41 +1,44 @@
 @echo off
-REM  One-stop setup: builds ClaudeRouter.exe from source and installs it.
+REM  One-stop setup for Windows: builds ClaudeRouter (NativeAOT) from source and
+REM  installs it. Just double-click this file.
 REM
-REM  Just double-click this file. It does everything else automatically -
-REM  and if Claude isn't installed on this PC, it downloads and installs it
-REM  for you first. (If Claude is already installed, opening it once
-REM  beforehand makes setup slightly faster, but it's not required.)
+REM  Requires the .NET 10 SDK (https://dotnet.microsoft.com/download) and, for the
+REM  NativeAOT build, the "Desktop development with C++" workload (MSVC linker).
 setlocal
-set DEST=%LOCALAPPDATA%\ClaudeRouter
-if not exist "%DEST%" mkdir "%DEST%"
 
-echo Preparing...
-copy /y "%~dp0src\ClaudeRouter.cs" "%DEST%\" >nul
-copy /y "%~dp0assets\Personal.ico" "%DEST%\" >nul
-copy /y "%~dp0assets\Work.ico"     "%DEST%\" >nul
-
-set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
-if not exist "%CSC%" set CSC=%WINDIR%\Microsoft.NET\Framework\v4.0.30319\csc.exe
-if not exist "%CSC%" (
+where dotnet >nul 2>nul
+if errorlevel 1 (
   echo.
-  echo ERROR: Could not find the C# compiler on this PC.
+  echo ERROR: The .NET 10 SDK is required to build ClaudeRouter.
+  echo Install it from https://dotnet.microsoft.com/download then run build.bat again.
   pause
   exit /b 1
 )
 
-"%CSC%" /nologo /target:winexe /out:"%DEST%\ClaudeRouter.exe" ^
-  /reference:System.Management.dll /reference:System.Windows.Forms.dll ^
-  "%DEST%\ClaudeRouter.cs"
+set ARCH=x64
+if /I "%PROCESSOR_ARCHITECTURE%"=="ARM64" set ARCH=arm64
+if /I "%PROCESSOR_ARCHITEW6432%"=="ARM64" set ARCH=arm64
+set RID=win-%ARCH%
 
-if not exist "%DEST%\ClaudeRouter.exe" (
+echo Building ClaudeRouter for %RID% ...
+dotnet publish "%~dp0src" -c Release -r %RID%
+if errorlevel 1 (
   echo.
   echo ERROR: Build failed - see the messages above.
   pause
   exit /b 1
 )
 
+set PUB=%~dp0src\bin\Release\net10.0\%RID%\publish\ClaudeRouter.exe
+if not exist "%PUB%" (
+  echo.
+  echo ERROR: Build did not produce ClaudeRouter.exe
+  pause
+  exit /b 1
+)
+
 echo Setting everything up...
-"%DEST%\ClaudeRouter.exe" setup
+"%PUB%" setup
 
 echo.
 echo Finished. Follow the on-screen box. You can close this window.

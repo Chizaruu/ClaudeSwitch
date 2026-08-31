@@ -2,41 +2,61 @@
 # =====================================================================
 #  install.sh  —  one-command ClaudeSwitch setup for Linux and macOS
 #
-#  The Unix counterpart to build.bat. There is nothing to compile here:
-#  the engine is the bash script in src/. This wrapper just makes it
-#  executable and runs its `setup`, which:
-#    • registers ClaudeSwitch as the claude:// login handler,
-#    • creates the per-account launchers (each with its own icon),
-#    • installs and starts the self-heal watcher, and
-#    • on macOS, downloads and installs Claude first if it is missing.
+#  Builds the ClaudeRouter engine (a single native binary) from source with
+#  NativeAOT, then runs its `setup`, which registers the claude:// handler,
+#  creates the per-account launchers, and installs the self-heal watcher (and,
+#  on macOS, downloads Claude first if it is missing).
+#
+#  Requires the .NET 10 SDK (https://dotnet.microsoft.com/download) plus the
+#  native toolchain NativeAOT needs: clang + zlib headers on Linux, the Xcode
+#  Command Line Tools on macOS.
 #
 #  USAGE:
 #    ./install.sh
 #
-#  Linux note: if Claude is not on your PATH, point this at your binary
-#  or AppImage:
+#  Linux note: if Claude is not on your PATH, point the engine at your binary
+#  or AppImage (the variable is passed straight through to setup):
 #    CLAUDE_BIN="$HOME/Applications/Claude.AppImage" ./install.sh
 # =====================================================================
 
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ENGINE="$HERE/src/claude-router.sh"
 
-if [ ! -f "$ENGINE" ]; then
-  echo "ERROR: could not find src/claude-router.sh next to this installer." >&2
-  echo "Run install.sh from inside the unzipped ClaudeSwitch folder." >&2
+if [ ! -f "$HERE/src/ClaudeRouter.csproj" ]; then
+  echo "ERROR: run install.sh from inside the unzipped ClaudeSwitch folder." >&2
+  exit 1
+fi
+
+if ! command -v dotnet >/dev/null 2>&1; then
+  echo "ERROR: the .NET 10 SDK is required to build ClaudeRouter." >&2
+  echo "Install it from https://dotnet.microsoft.com/download then run ./install.sh again." >&2
   exit 1
 fi
 
 case "$(uname -s)" in
-  Linux|Darwin) ;;
-  *) echo "This installer is for Linux and macOS. On Windows, double-click build.bat instead." >&2; exit 1 ;;
+  Linux)  OS=linux ;;
+  Darwin) OS=osx ;;
+  *) echo "This installer is for Linux and macOS. On Windows, double-click build.bat." >&2; exit 1 ;;
 esac
 
-chmod +x "$ENGINE" 2>/dev/null || true
+case "$(uname -m)" in
+  x86_64|amd64)  ARCH=x64 ;;
+  arm64|aarch64) ARCH=arm64 ;;
+  *) echo "Unsupported CPU architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+RID="$OS-$ARCH"
+echo "Building ClaudeRouter for $RID ..."
+dotnet publish "$HERE/src" -c Release -r "$RID"
+
+PUB="$HERE/src/bin/Release/net10.0/$RID/publish/ClaudeRouter"
+if [ ! -x "$PUB" ]; then
+  echo "ERROR: build did not produce $PUB" >&2
+  exit 1
+fi
 
 echo "Setting up ClaudeSwitch..."
-"$ENGINE" setup
+"$PUB" setup
 echo
 echo "Done. You can close this window."

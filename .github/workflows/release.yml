@@ -1,0 +1,58 @@
+name: Release
+
+# Cut a GitHub Release whenever a version tag is pushed, e.g.:
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# By design this publishes SOURCE BUNDLES ONLY — no prebuilt binaries. Users
+# build the NativeAOT binary locally (build.bat / install.sh run `dotnet
+# publish`), which keeps every artifact something the user produced themselves
+# rather than an unsigned binary that trips SmartScreen / Gatekeeper. See README
+# "Releases" and CONTRIBUTING.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # required to create the Release and upload assets
+
+jobs:
+  source-bundles:
+    name: Build source bundles + Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build source archives
+        id: bundle
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          NAME="claude-switch-${TAG}"
+          mkdir -p dist stage/"$NAME"
+          # Everything except VCS metadata and the workflow's own scratch.
+          rsync -a --exclude '.git' --exclude 'dist' --exclude 'stage' ./ stage/"$NAME"/
+          ( cd stage && zip -r -q "../dist/${NAME}-source.zip" "$NAME" )
+          ( cd stage && tar -czf "../dist/${NAME}-source.tar.gz" "$NAME" )
+          ( cd dist && sha256sum ./* > SHA256SUMS.txt )
+          ls -lh dist
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            **ClaudeSwitch ${{ github.ref_name }}** — source bundles.
+
+            These are **source archives**, not prebuilt binaries. You'll need the
+            .NET 10 SDK; the scripts build the native binary with `dotnet publish`:
+            - **Windows:** unzip and double-click `build.bat`.
+            - **Linux / macOS:** unzip and run `./install.sh`.
+
+            Verify with `sha256sum -c SHA256SUMS.txt`.
+          files: |
+            dist/${{ steps.bundle.outputs.name }}-source.zip
+            dist/${{ steps.bundle.outputs.name }}-source.tar.gz
+            dist/SHA256SUMS.txt

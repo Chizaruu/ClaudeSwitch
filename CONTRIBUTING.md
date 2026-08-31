@@ -6,69 +6,65 @@ hardening the Linux/macOS engine.
 
 ## Ways to help
 
-- **Exercise the Linux/macOS engine on real hardware.** `src/claude-router.sh`
-  implements the full feature set, but the two *best-effort* UI pieces —
-  per-account window grouping on Linux (`StartupWMClass`, WM-dependent) and
-  per-account Dock icons on macOS — benefit most from real-world reports (attach
-  `router.log`, and note your OS / desktop environment / Claude version).
-- **Fix bugs** in the Windows router or the Unix engine.
+- **Exercise it on real hardware.** The engine is fully implemented on all three
+  OSes, but two *best-effort* UI pieces — per-account window grouping on Linux
+  (`StartupWMClass`, WM-dependent) and per-account Dock icons on macOS — benefit
+  most from real-world reports (attach `router.log`, and note your OS / desktop
+  environment / Claude version). The Windows COM interop in `WindowsInterop.cs`
+  also deserves testing on real Windows builds.
+- **Fix bugs** anywhere in `src/`.
 - **Improve docs** — clearer setup steps, screenshots, troubleshooting.
 - **Add small features** that fit the tool's scope (e.g. more than two accounts).
 
 ## Development setup
 
-### Windows (`src/ClaudeRouter.cs`)
-
-No SDK download is required — the C# compiler ships with Windows.
-
-```bat
-:: From the repo root, build + install:
-build.bat
-
-:: Or compile manually to inspect the output:
-%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe ^
-  /nologo /target:winexe /out:ClaudeRouter.exe ^
-  /reference:System.Management.dll /reference:System.Windows.Forms.dll ^
-  src\ClaudeRouter.cs
-```
-
-Useful subcommands while developing: `status`, `tag`, `register`, `launch Work`.
-
-### Linux / macOS (`src/claude-router.sh`)
-
-The engine is a single Bash script — no build step. Install it (or just probe it):
+The engine is one C# project in [`src/`](src/), published with **NativeAOT**. You
+need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and your OS's native
+toolchain (MSVC "Desktop development with C++" on Windows, `clang` + `zlib` dev
+headers on Linux, Xcode Command Line Tools on macOS).
 
 ```bash
-./install.sh                      # full setup (register + launchers + watcher)
-./src/claude-router.sh status     # read-only report
-```
+# Build + install for your platform (from the repo root):
+build.bat            # Windows
+./install.sh         # Linux / macOS   (CLAUDE_BIN=... ./install.sh if Claude isn't on PATH)
 
-Keep it **Bash 3.2-compatible** (that's what stock macOS ships): no `${arr[-1]}`,
-no `${var,,}`, no associative arrays. Run both checks before submitting — CI runs
-them on Ubuntu and macOS:
-
-```bash
-bash -n src/claude-router.sh install.sh uninstall.sh   # syntax
-shellcheck src/claude-router.sh install.sh uninstall.sh # lint (keep it clean)
+# Or drive the compiler directly:
+dotnet build   src -c Release                    # fast compile check (all platforms' code)
+dotnet publish src -c Release -r linux-x64        # native binary (win-x64 / osx-arm64 / …)
+./src/bin/Release/net10.0/<rid>/publish/ClaudeRouter status
 ```
 
 Useful subcommands while developing: `status`, `register`, `launch Work`, `tag`,
 `test`, `watch`, `handle 'claude://…'`.
 
+**Notes for the code:**
+
+- **NativeAOT-safe only** — no reflection-based APIs (no WMI/`System.Management`, no
+  runtime COM marshalling). Windows COM uses source-generated `[GeneratedComInterface]`;
+  a cross-process command line is read from the PEB via `ReadProcessMemory`.
+- **`Router` stays OS-agnostic** — put anything OS-specific behind `IPlatform`.
+- A plain `dotnet build` compiles every platform's code; `dotnet publish -r <rid>`
+  does the real NativeAOT link and only cross-compiles for the host OS (CI covers
+  the other two).
+
+The two install scripts are small; keep them `shellcheck`-clean:
+
+```bash
+shellcheck install.sh uninstall.sh
+```
+
 ## Guidelines
 
-- **Keep it dependency-light.** The Windows build should keep compiling with the
-  in-box C# compiler; the Bash engine should rely only on common tools
-  (`xdg-mime`, `zenity`/`kdialog`, `osascript`, `duti`, `launchctl`).
-- **Do not commit binaries.** `*.exe`/`*.dll` are git-ignored on purpose — users
-  build from source. Release artifacts (if any) belong under GitHub Releases. The
-  icon assets (`.ico`/`.png`/`.icns`) are committed on purpose so installs are
-  turnkey.
+- **Keep it dependency-light and AOT-safe.** No extra NuGet packages unless they're
+  trim/AOT-compatible; rely on the OS's own tools (`xdg-mime`, `zenity`/`kdialog`,
+  `osascript`, `duti`, `launchctl`, `reg`).
+- **Do not commit binaries.** `bin/`, `obj/`, `*.exe`/`*.dll` are git-ignored on
+  purpose — users build from source; releases ship source bundles. The icon assets
+  (`.ico`/`.png`/`.icns`) are committed on purpose so installs are turnkey.
 - **Match the existing style** (see `.editorconfig`): 4-space indentation in C#,
   2-space in shell, CRLF for `.bat` files, LF for `.sh`.
-- **Test before you push.** For Windows changes, run `build.bat` and confirm a
-  login routes correctly. For the Unix engine, run `./install.sh`, confirm a login
-  routes, and note which OS/desktop you tested on.
+- **Test before you push.** Run `build.bat` / `./install.sh`, confirm a login
+  routes correctly, and note the OS / desktop / Claude version you tested on.
 
 ## Pull request process
 

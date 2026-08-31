@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ClaudeSwitch — the ClaudeRouter engine.
+
+    One C# codebase for Windows, macOS and Linux, published per-RID as a small,
+    dependency-free NATIVE binary via NativeAOT. No .NET runtime is required on
+    the end-user's machine. See README.md here for architecture notes and the
+    rationale for NativeAOT over .NET MAUI.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>ClaudeRouter</AssemblyName>
+    <RootNamespace>ClaudeSwitch</RootNamespace>
+
+    <!-- NativeAOT: one small self-contained native binary per platform. -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <StripSymbols>true</StripSymbols>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- The platforms this single source tree targets. -->
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-x64;osx-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <!-- Ship the shared repo icons next to the binary as ./assets, so `setup`
+       can copy the right per-OS icon into the router home. -->
+  <ItemGroup>
+    <Content Include="../assets/*.ico;../assets/*.png;../assets/*.icns"
+             Link="assets/%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

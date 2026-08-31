@@ -7,35 +7,47 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- **Full Linux and macOS support.** `src/claude-router.sh` is built out from an
-  experimental scaffold to a complete engine with parity to the Windows version:
-  per-account launchers that carry their own icon (a `.desktop` with a distinct
-  `StartupWMClass` on Linux; a wrapper `.app` bundle on macOS), a self-heal watcher
-  (an autostart entry on Linux, a `launchd` LaunchAgent on macOS), `register` /
-  `unregister` / `status` / `tag` / `uninstall` subcommands, and — on macOS —
-  automatic download and install of Claude Desktop when it is absent.
-- `install.sh` / `uninstall.sh` — one-command setup and removal for Linux and
-  macOS (the Unix counterparts to `build.bat` / `uninstall.bat`).
+- **Unified cross-platform engine (`src/`, C# + NativeAOT).** One codebase for
+  Windows, macOS and Linux, published per-RID into a small, dependency-free native
+  binary — no .NET runtime for end users. An OS-agnostic `Router` sits over an
+  `IPlatform` abstraction with `Windows` / `Mac` / `Linux` implementations.
+- **Full feature set on every OS:** `claude://` handler (registry / `xdg-mime` /
+  `duti`), account chooser (Win32 dialog / `zenity`·`kdialog` / `osascript`),
+  per-account launchers with their own icon (AUMID-tagged `.lnk` / `.desktop` with
+  `StartupWMClass` / wrapper `.app`), a self-heal watcher (HKCU `Run` /
+  `~/.config/autostart` / `launchd`), and auto-install of Claude when absent
+  (Windows & macOS).
+- **Windows taskbar coloring under NativeAOT:** AppUserModel.ID window tagging,
+  per-window icon and regroup, and AUMID-tagged shortcuts, implemented with
+  source-generated COM (`[GeneratedComInterface]`) and a PEB-based cross-process
+  command-line read (`WindowsInterop.cs`) — no WMI, no runtime COM marshalling.
+- **Tag-triggered, source-only release automation** (`.github/workflows/release.yml`):
+  a `vX.Y.Z` tag publishes a GitHub Release with source bundles
+  (`.zip` + `.tar.gz` + `SHA256SUMS.txt`) — no unsigned prebuilt binaries.
 - Per-platform icon assets: `assets/*.png` (Linux) and `assets/*.icns` (macOS),
   generated from the existing `.ico` sources.
 - Open-source project scaffolding: MIT `LICENSE`, `CONTRIBUTING.md`,
-  `SECURITY.md`, `CODE_OF_CONDUCT.md`, this changelog, issue/PR templates, and a
-  GitHub Actions build check.
-- Reorganized repository layout (`src/`, `assets/`) with an OSS-focused `README`.
+  `SECURITY.md`, `CODE_OF_CONDUCT.md`, this changelog, issue/PR templates, and
+  GitHub Actions build/lint checks.
 
 ### Changed
-- Renamed the project to **ClaudeSwitch** (repo slug `claude-switch`). The
-  login-routing engine keeps its name — `ClaudeRouter.exe` / `claude-router.sh`.
-- `build.bat` now references source in `src/` and icons in `assets/`.
-- The Linux/macOS engine is written to stay Bash 3.2-compatible (stock macOS) and
-  is `shellcheck`-clean; CI now checks it on both Ubuntu and macOS runners.
-- README, CONTRIBUTING, and the platform-support table rewritten to document all
-  three platforms as supported, with the two inherently best-effort UI details
-  (Linux window grouping and macOS Dock icons) called out honestly.
+- Renamed the project to **ClaudeSwitch** (repo slug `claude-switch`); the engine
+  keeps its name, **ClaudeRouter**.
+- **`build.bat` / `install.sh` now build via `dotnet publish`** (NativeAOT) instead
+  of the in-box C# compiler, then run the binary's `setup`. Building now requires
+  the .NET 10 SDK plus each OS's native toolchain.
+- Background launches (the watcher and each Claude window) are now fully detached,
+  so a terminal or an OS-invoked `handle` returns immediately.
+- CI builds the NativeAOT binary on Windows, macOS and Linux runners; README,
+  CONTRIBUTING and the platform-support table rewritten around the single app, with
+  the two inherently best-effort UI details (Linux window grouping, macOS Dock
+  icons) called out honestly.
 
 ### Removed
-- Prebuilt binaries (`ClaudeRouter.exe`, `ClaudeRouterSetup.exe`) are no longer
-  committed; build from source instead.
+- The original Windows-only WinForms implementation (`src/ClaudeRouter.cs`) and the
+  Bash Linux/macOS port (`src/claude-router.sh`), both superseded by the unified
+  .NET engine.
+- Prebuilt binaries are not committed; build from source instead.
 
 ## [0.1.0]
 
