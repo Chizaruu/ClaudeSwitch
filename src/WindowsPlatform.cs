@@ -83,10 +83,14 @@ sealed class WindowsPlatform : IPlatform
     {
         string dir = Config.DataDirFor(account);
         Directory.CreateDirectory(dir);
-        string? exe = FindClaudeExe();
+        string? exe = FindClaudeLauncher(out bool isMsix);
         if (exe == null) { Config.Log("no claude.exe found"); return; }
         var args = new List<string> { $"--user-data-dir={dir}" };
         if (!string.IsNullOrEmpty(url)) args.Add(url);
+        // Launching the MSIX alias activates Claude with package identity (needed
+        // for Cowork); a legacy exe does not. Best-effort — whether a second
+        // MSIX instance with its own data dir keeps identity is unverified.
+        Config.Log($"launching '{account}' via {(isMsix ? "MSIX alias" : "legacy exe")}: {exe}");
         Sh.Start(exe, args);
     }
 
@@ -116,30 +120,12 @@ sealed class WindowsPlatform : IPlatform
     public bool EnsureClaude()
     {
         if (ClaudePresent()) return true;
-        Notify("Claude isn't installed — downloading the official installer now.");
-        if (TryInstall() && ClaudePresent()) return true;
-        Notify("Couldn't install automatically. Install Claude from https://claude.ai/download , then run setup again.");
+        // Deliberately no auto-install: the old flow fetched the Squirrel setup,
+        // which is exactly the "legacy" install Cowork now rejects. Point the user
+        // at the modern (MSIX) installer instead.
+        Notify("Claude Desktop isn't installed.\\n\\nInstall it with the modern installer from " +
+               "https://claude.ai/download (the MSIX build — required for Cowork), then run setup again.");
         return false;
-    }
-
-    static bool TryInstall()
-    {
-        try
-        {
-            string arch = RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "arm64" : "x64";
-            string dst = Path.Combine(Path.GetTempPath(), "ClaudeSetup.exe");
-            if (Sh.Run("curl", "-fL", "-o", dst,
-                    $"https://claude.ai/api/desktop/win32/{arch}/setup/latest/redirect").code != 0) return false;
-            Sh.Start(dst, Array.Empty<string>(), shellExecute: true); // installer UI / UAC
-            for (int i = 0; i < 180 && !ClaudeRunning(); i++) Thread.Sleep(1000);
-            return FindClaudeExe() != null;
-        }
-        catch (Exception ex) { Config.Log($"win install err: {ex.Message}"); return false; }
-    }
-
-    static bool ClaudeRunning()
-    {
-        try { return System.Diagnostics.Process.GetProcessesByName("claude").Length > 0; } catch { return false; }
     }
 
     public void Tag()
@@ -192,18 +178,54 @@ sealed class WindowsPlatform : IPlatform
         return cl.Substring(i, k - i);
     }
 
-    public string ClaudeLocationLine() => $"Claude exe  : {FindClaudeExe() ?? "(not found)"}";
-
-    static string? FindClaudeExe()
+    public string ClaudeLocationLine()
     {
+        string? exe = FindClaudeLauncher(out bool msix);
+        string kind = exe == null ? "" : msix ? "  (MSIX / modern — Cowork-capable)" : "  (legacy install — Cowork unavailable)";
+        return $"Claude exe  : {exe ?? "(not found)"}{kind}";
+    }
+
+    static string? FindClaudeExe() => FindClaudeLauncher(out _);
+
+    // Find the best way to launch Claude, and report whether it's the MSIX
+    // ("modern") install. Order matters: the MSIX execution alias is preferred
+    // because launching it activates Claude WITH package identity — which
+    // Cowork's "modern installer" check requires. A Squirrel/portable exe
+    // launches without identity, so Cowork stays disabled in that window.
+    static string? FindClaudeLauncher(out bool isMsix)
+    {
+        isMsix = false;
+
+        // 1. MSIX app-execution alias (a reparse point under WindowsApps). Running
+        //    it starts Claude inside its package container, with identity.
+        string alias = Path.Combine(Local, "Microsoft", "WindowsApps", "claude.exe");
+        if (File.Exists(alias)) { isMsix = true; return alias; }
+
+        // 2. Portable copy left by an older ClaudeSwitch (legacy, no identity).
         string portable = Path.Combine(Local, "ClaudePortable", "app", "claude.exe");
         if (File.Exists(portable)) return portable;
+
+        // 3. Squirrel install under %LOCALAPPDATA%\AnthropicClaude (legacy).
         string anthropic = Path.Combine(Local, "AnthropicClaude");
         if (Directory.Exists(anthropic))
-            try { return Directory.EnumerateFiles(anthropic, "claude.exe", SearchOption.AllDirectories).FirstOrDefault(); }
+        {
+            try
+            {
+                string? f = Directory.EnumerateFiles(anthropic, "claude.exe", SearchOption.AllDirectories).FirstOrDefault();
+                if (f != null) return f;
+            }
             catch { }
+        }
+
+        // 4. Anything else on PATH (a WindowsApps hit here is also MSIX).
         var (c, o) = Sh.Run("where", "claude");
-        return c == 0 && o.Length > 0 ? o.Split('\n')[0].Trim() : null;
+        if (c == 0 && o.Length > 0)
+        {
+            string p = o.Split('\n')[0].Trim();
+            if (p.IndexOf(@"\WindowsApps\", StringComparison.OrdinalIgnoreCase) >= 0) isMsix = true;
+            return p;
+        }
+        return null;
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]

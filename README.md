@@ -51,12 +51,13 @@ Chrome uses for profiles.
 
 ## Install (Windows)
 
-Download **`ClaudeSwitch-<version>-x64.msi`** from the
-[latest release](https://github.com/Chizaruu/ClaudeSwitch/releases/latest) and run
-it. It's a **per-user install (no admin)** and needs nothing else installed — it
-drops the `ClaudeRouter` binary in place, registers the login router, creates the
-colored **Claude (Personal)** / **Claude (Work)** shortcuts, starts the background
-watcher, and downloads Claude first if it isn't installed.
+**First install Claude Desktop with the modern (MSIX) installer** from
+<https://claude.ai/download> — see [Cowork & the modern installer](#cowork--the-modern-installer)
+below for why this matters. Then download **`ClaudeSwitch-<version>-x64.msi`** from
+the [latest release](https://github.com/Chizaruu/ClaudeSwitch/releases/latest) and
+run it. It's a **per-user install (no admin)**: it drops the `ClaudeRouter` binary in
+place, registers the login router, creates the colored **Claude (Personal)** /
+**Claude (Work)** shortcuts, and starts the background watcher.
 
 > The MSI is currently **unsigned**, so SmartScreen may show "Windows protected your
 > PC" — click **More info → Run anyway**. (Code signing is wired into CI and turns
@@ -223,15 +224,42 @@ activates the moment you add a code-signing certificate as repo secrets
 (`WINDOWS_CERT_PFX_BASE64` + `WINDOWS_CERT_PASSWORD`). macOS and Linux still build
 from source with the .NET SDK.
 
+## Cowork & the modern installer
+
+Claude Desktop's **Cowork** feature requires the **modern (MSIX) install** of Claude
+and refuses to run against the older **Squirrel** install (`%LOCALAPPDATA%\AnthropicClaude`)
+— you'll see *"Cowork requires Claude Desktop be installed with our modern installer"*.
+This is a Claude Desktop requirement, independent of ClaudeSwitch, but it interacts
+with how ClaudeSwitch launches accounts:
+
+- ClaudeSwitch launches Claude with a per-account `--user-data-dir`. To keep Cowork
+  working it now launches Claude through its **MSIX app-execution alias**
+  (`…\WindowsApps\claude.exe`), so the process keeps its package identity — the
+  thing Cowork checks. `ClaudeRouter status` reports whether the Claude it found is
+  the MSIX build or a legacy one.
+- If your Claude is the **Squirrel** install, Cowork won't work in *any* window
+  (ClaudeSwitch or not). Reinstall Claude with the modern installer from
+  <https://claude.ai/download>.
+
+> **Best-effort, and honestly uncertain.** Whether a *second* MSIX Claude instance
+> launched with its own `--user-data-dir` keeps package identity — and therefore
+> lights up Cowork in both accounts — depends on Claude's MSIX packaging and hasn't
+> been confirmed. It may turn out that "two accounts" and "Cowork" can't both work
+> on Windows until Anthropic ships native multi-account support (the very gap this
+> tool exists to bridge). If Cowork stays greyed out in a ClaudeSwitch window,
+> that's the current limitation — use your primary MSIX Claude for Cowork.
+
 ## Troubleshooting
 
+- **"Cowork requires … modern installer"** — see [Cowork & the modern installer](#cowork--the-modern-installer).
+  Check `ClaudeRouter status` for whether your Claude is MSIX or legacy.
 - **A login lands in the wrong window** — the watcher re-claims the link
   automatically; if it slips, run `ClaudeRouter register` once. Check `router.log`
   in the router home.
 - **A taskbar/dock button won't separate or color** — run `ClaudeRouter tag`, or
   confirm the watcher is running with `ClaudeRouter status`.
 - **`dotnet` not found / NativeAOT build fails** — install the .NET 10 SDK and your
-  OS's native toolchain (see [Requirements](#requirements)).
+  OS's native toolchain (see [Building](#building-macos-linux-or-windows-from-source)).
 
 ---
 

@@ -59,6 +59,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - No more console window flashing on Windows when opening an account (or on a
   `claude://` login callback): the app is built as `WinExe` (GUI subsystem) so the
   shortcut-launched `launch`/`handle` commands run without allocating a console.
+- **Cowork / "modern installer" (Windows, best-effort):** accounts are now launched
+  through Claude's **MSIX app-execution alias** so the process keeps its package
+  identity, which Cowork's modern-installer check requires (a legacy Squirrel/portable
+  exe launch has no identity). `status` reports whether the Claude found is MSIX or
+  legacy, and the Windows auto-installer no longer fetches the Squirrel build (that
+  was the exact install Cowork rejects) — it now points at the modern installer.
+  Whether a *second* MSIX instance with its own data dir keeps identity is unverified;
+  see the README's "Cowork & the modern installer".
 - CI builds the NativeAOT binary on Windows, macOS and Linux runners; README,
   CONTRIBUTING and the platform-support table rewritten around the single app, with
   the two inherently best-effort UI details (Linux window grouping, macOS Dock
