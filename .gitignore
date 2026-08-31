@@ -1,0 +1,21 @@
+# Build output / compiled binaries (build from source instead)
+*.exe
+*.dll
+*.pdb
+*.obj
+bin/
+obj/
+
+# Local build/install scratch
+router.log
+session-backup-*/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.vs/
+.vscode/
+.idea/

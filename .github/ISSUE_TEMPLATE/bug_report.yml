@@ -1,0 +1,48 @@
+name: Bug report
+description: Report a problem with ClaudeSwitch
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report! Please attach your
+        `router.log` (found at `%LOCALAPPDATA%\ClaudeRouter\router.log` on
+        Windows, or `router.log` in the router home on Linux/macOS) when relevant.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Ran build.bat
+        2. Clicked "Work" in the chooser
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows 11
+        - Windows 10
+        - Linux
+        - macOS
+    validations:
+      required: true
+  - type: input
+    id: claude-version
+    attributes:
+      label: Claude Desktop version
+      placeholder: e.g. 0.x.x
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant router.log output
+      render: shell
