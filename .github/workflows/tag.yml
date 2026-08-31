@@ -1,0 +1,64 @@
+name: Tag
+
+# Auto-tagging, version-driven. The <Version> in src/ClaudeRouter.csproj is the
+# single source of truth. On every push to main this reads that version and, if
+# the tag v$(Version) does not already exist, creates and pushes it — then calls
+# the Release workflow to publish the source bundles for it.
+#
+# To cut a release: bump <Version> in src/ClaudeRouter.csproj and merge to main.
+# No version change ⇒ no tag ⇒ no release, so ordinary commits are safe.
+#
+# Note: the tag is pushed with the default GITHUB_TOKEN, which deliberately does
+# NOT re-trigger other workflows — so instead of relying on Release's own
+# tag-push trigger, we invoke it directly via workflow_call below.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Auto-tag from csproj version
+    runs-on: ubuntu-latest
+    outputs:
+      created: ${{ steps.tag.outputs.created }}
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the full tag list
+
+      - name: Read version and tag if new
+        id: tag
+        run: |
+          set -euo pipefail
+          version="$(grep -oPm1 '(?<=<Version>)[^<]+' src/ClaudeRouter.csproj || true)"
+          if [ -z "$version" ]; then
+            echo "::error::No <Version> found in src/ClaudeRouter.csproj"
+            exit 1
+          fi
+          tag="v$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists — nothing to tag."
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+          echo "Created and pushed $tag"
+
+  release:
+    needs: tag
+    if: needs.tag.outputs.created == 'true'
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
+    with:
+      tag: ${{ needs.tag.outputs.tag }}

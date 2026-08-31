@@ -76,3 +76,12 @@ shellcheck install.sh uninstall.sh
 
 By contributing, you agree that your contributions are licensed under the
 project's [MIT License](LICENSE).
+
+## Releasing
+
+Releases are version-driven and automatic. Bump `<Version>` in
+`src/ClaudeRouter.csproj` (and roll the `CHANGELOG.md` `[Unreleased]` section into a
+dated entry for that version), then merge to `main`. The **Tag** workflow creates
+`v<version>` and the **Release** workflow publishes the source bundles. Don't push
+tags by hand unless you want an out-of-band release — a version bump is the normal
+path.

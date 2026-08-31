@@ -198,12 +198,19 @@ home records what each callback did.
 
 ## Releases
 
-Tagging a version (`git tag v0.2.0 && git push origin v0.2.0`) triggers
-[`.github/workflows/release.yml`](.github/workflows/release.yml), which publishes a
-GitHub Release with **source bundles** (`.zip` + `.tar.gz` + `SHA256SUMS.txt`).
-These are deliberately *source*, not prebuilt binaries: you build locally with the
-.NET SDK (`build.bat` / `install.sh` run `dotnet publish`), so nothing ships as an
-unsigned binary that would trip SmartScreen or Gatekeeper.
+Releasing is **version-driven and automatic**. The `<Version>` in
+[`src/ClaudeRouter.csproj`](src/ClaudeRouter.csproj) is the single source of truth:
+bump it and merge to `main`, and [`.github/workflows/tag.yml`](.github/workflows/tag.yml)
+creates the matching `v<version>` tag, which drives
+[`.github/workflows/release.yml`](.github/workflows/release.yml) to publish a GitHub
+Release. Ordinary commits that don't change the version are safe — no version bump,
+no tag, no release. (You can still cut one by hand: `git tag v0.2.0 && git push
+origin v0.2.0`.)
+
+Releases carry **source bundles** (`.zip` + `.tar.gz` + `SHA256SUMS.txt`), not
+prebuilt binaries: you build locally with the .NET SDK (`build.bat` / `install.sh`
+run `dotnet publish`), so nothing ships as an unsigned binary that would trip
+SmartScreen or Gatekeeper.
 
 ## Troubleshooting
 

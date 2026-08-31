@@ -18,6 +18,9 @@
     <AssemblyName>ClaudeRouter</AssemblyName>
     <RootNamespace>ClaudeSwitch</RootNamespace>
 
+    <!-- Single source of truth for the version; the Tag workflow tags v$(Version). -->
+    <Version>0.2.0</Version>
+
     <!-- NativeAOT: one small self-contained native binary per platform. -->
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
@@ -26,6 +29,13 @@
 
     <!-- The platforms this single source tree targets. -->
     <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-x64;osx-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <!-- Release output is just the native binary + assets/ — no debug symbols
+       (drops the ~11 MB ClaudeRouter.pdb on Windows and the .dbg on Unix). -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
   <!-- Ship the shared repo icons next to the binary as ./assets, so `setup`

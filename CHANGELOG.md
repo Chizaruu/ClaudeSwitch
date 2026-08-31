@@ -21,9 +21,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   per-window icon and regroup, and AUMID-tagged shortcuts, implemented with
   source-generated COM (`[GeneratedComInterface]`) and a PEB-based cross-process
   command-line read (`WindowsInterop.cs`) — no WMI, no runtime COM marshalling.
-- **Tag-triggered, source-only release automation** (`.github/workflows/release.yml`):
-  a `vX.Y.Z` tag publishes a GitHub Release with source bundles
+- **Version-driven auto-tagging** (`.github/workflows/tag.yml`): the `<Version>` in
+  `src/ClaudeRouter.csproj` is the single source of truth — bumping it and merging to
+  `main` creates the `v<version>` tag and publishes the release automatically.
+- **Source-only release automation** (`.github/workflows/release.yml`): a `vX.Y.Z`
+  tag (auto or manual) publishes a GitHub Release with source bundles
   (`.zip` + `.tar.gz` + `SHA256SUMS.txt`) — no unsigned prebuilt binaries.
+- **NuGet caching in CI** so the ~570 MB NativeAOT toolchain (ILCompiler + runtime
+  packs) is not re-downloaded on every run.
 - Per-platform icon assets: `assets/*.png` (Linux) and `assets/*.icns` (macOS),
   generated from the existing `.ico` sources.
 - Open-source project scaffolding: MIT `LICENSE`, `CONTRIBUTING.md`,
@@ -38,6 +43,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the .NET 10 SDK plus each OS's native toolchain.
 - Background launches (the watcher and each Claude window) are now fully detached,
   so a terminal or an OS-invoked `handle` returns immediately.
+- Release builds emit no debug symbols (`DebugType=none`), so the published output
+  is just the native binary + `assets/` — dropping the ~11 MB `ClaudeRouter.pdb` on
+  Windows and the `.dbg` on Unix.
 - CI builds the NativeAOT binary on Windows, macOS and Linux runners; README,
   CONTRIBUTING and the platform-support table rewritten around the single app, with
   the two inherently best-effort UI details (Linux window grouping, macOS Dock
