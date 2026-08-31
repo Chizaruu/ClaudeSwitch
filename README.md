@@ -15,8 +15,8 @@ own colored taskbar button. No more logging in and out to switch.
 > and go back to the normal app — nothing here locks you in.
 >
 > _The name:_ **ClaudeSwitch** is the project; its login-routing engine is
-> `ClaudeRouter.exe` on Windows (and `claude-router.sh` on Linux/macOS), which is
-> what `build.bat` compiles and installs.
+> `ClaudeRouter.exe` on Windows (compiled and installed by `build.bat`) and
+> `claude-router.sh` on Linux/macOS (installed by `install.sh`).
 
 ---
 
@@ -38,11 +38,15 @@ taskbar identity and color — the same trick Chrome uses for profiles.
 - **A login chooser** — at sign-in, a small "Which account?" box routes the
   callback to the right window.
 - **Self-healing** — a lightweight background watcher re-claims the `claude://`
-  handler and re-colors windows, so it survives Claude updates.
+  handler (and, on Windows, re-colors windows), so it survives Claude updates.
 - **One small native program** — no runtime to install; on Windows it compiles
-  with the C# compiler that already ships with the OS.
-- **Cross-platform port** — a Bash implementation for Linux and macOS is included
-  (experimental — see [Platform support](#platform-support)).
+  with the C# compiler that already ships with the OS, and on Linux/macOS it's a
+  single dependency-light Bash script.
+- **All three desktops** — Windows (`ClaudeRouter.exe`), Linux and macOS
+  (`claude-router.sh`) each use the correct native mechanism for the login
+  handler, the account chooser, the per-account taskbar/dock icon, and the
+  self-heal watcher. See [Platform support](#platform-support) for what's
+  fully native versus best-effort on each OS.
 
 ---
 
@@ -71,6 +75,53 @@ Claude icon.
 
 ---
 
+## Install (macOS)
+
+**Requirements:** macOS 12+. [`duti`](https://github.com/moretension/duti)
+(`brew install duti`) is recommended so the `claude://` handler sticks reliably.
+
+1. Download and unzip this repository (or `git clone`).
+2. In Terminal, from the unzipped folder:
+
+   ```bash
+   ./install.sh
+   ```
+
+`install.sh` runs the engine's `setup`: it registers ClaudeSwitch as the
+`claude://` handler, builds a **Claude (Personal)** and **Claude (Work)** launcher
+on your Desktop (each carrying its own icon), and installs a login-item watcher
+(a `launchd` LaunchAgent) that re-claims the handler after Claude updates. If
+Claude Desktop isn't installed, it downloads and installs the official app first.
+
+Open each account from its Desktop launcher; keep both in the Dock if you like.
+
+## Install (Linux)
+
+**Requirements:** a desktop environment with `xdg-mime`, and `zenity` **or**
+`kdialog` for the account chooser. Claude Desktop itself must already be present —
+point the tool at your Claude binary or AppImage if it isn't on your `PATH`.
+
+1. Download and unzip this repository (or `git clone`).
+2. From the unzipped folder:
+
+   ```bash
+   ./install.sh
+   # or, if Claude isn't on your PATH:
+   CLAUDE_BIN="$HOME/Applications/Claude.AppImage" ./install.sh
+   ```
+
+`install.sh` runs the engine's `setup`: it registers ClaudeSwitch as the
+`claude://` handler (`xdg-mime`), creates **Claude (Personal)** / **Claude (Work)**
+`.desktop` launchers in your applications menu — each with its own icon and a
+distinct `StartupWMClass` so it groups under its own taskbar button — and installs
+an autostart watcher that re-claims the handler after Claude updates.
+
+> Prefer to inspect the code first? `src/claude-router.sh` is the entire engine —
+> `install.sh` just makes it executable and runs its `setup`. Nothing is fetched
+> except, on macOS with no Claude present, the official installer from `claude.ai`.
+
+---
+
 ## Usage
 
 Day to day:
@@ -80,7 +131,8 @@ Day to day:
   the right window.
 - The background watcher keeps each window colored and separated automatically.
 
-Management commands (run from `%LOCALAPPDATA%\ClaudeRouter`, or use the shortcuts):
+**Windows** management commands (run from `%LOCALAPPDATA%\ClaudeRouter`, or use the
+shortcuts):
 
 | Command                        | What it does                                   |
 | ------------------------------ | ---------------------------------------------- |
@@ -90,8 +142,22 @@ Management commands (run from `%LOCALAPPDATA%\ClaudeRouter`, or use the shortcut
 | `ClaudeRouter.exe launch Work` | Open an account (also `Personal`).             |
 | `uninstall.bat`                | Remove the router + shortcuts.                 |
 
-**Change the colors:** replace `assets/Personal.ico` / `assets/Work.ico` (keep the
-names) and run `build.bat` again.
+**Linux / macOS** management commands (the installed engine lives at
+`~/.local/share/claude-router/claude-router.sh` on Linux and
+`~/Library/Application Support/claude-router/claude-router.sh` on macOS):
+
+| Command                              | What it does                                        |
+| ------------------------------------ | --------------------------------------------------- |
+| `claude-router.sh status`            | Show the handler, watcher, and launcher state.      |
+| `claude-router.sh tag`               | Re-assert the per-account launcher identity now.    |
+| `claude-router.sh register`          | Re-claim the `claude://` link for the router.       |
+| `claude-router.sh launch Work`       | Open an account (also `Personal`).                  |
+| `claude-router.sh test`              | Fire a harmless `claude://router-test` link.        |
+| `./uninstall.sh`                     | Remove the handler, launchers + watcher.            |
+
+**Change the colors:** replace the icon files for your platform in `assets/` (keep
+the names) and re-run the installer. Windows uses `Personal.ico` / `Work.ico`;
+Linux uses `Personal.png` / `Work.png`; macOS uses `Personal.icns` / `Work.icns`.
 
 > **About the icons:** `Personal.ico` and `Work.ico` are **not** the official
 > Claude icon reskinned or recolored — they're two original marks generated with
@@ -100,8 +166,9 @@ names) and run `build.bat` again.
 > you know, not end up broke). Swap in whatever icons you like.
 
 **Add or rename accounts:** edit the `Accounts` array near the top of
-`src/ClaudeRouter.cs` (and the `ACCOUNTS` array in `src/claude-router.sh` for the
-Unix port), then rebuild.
+`src/ClaudeRouter.cs` and the `ACCOUNTS` array in `src/claude-router.sh`, add a
+matching icon in `assets/` for each new name, then re-run the installer for your
+platform.
 
 ---
 
@@ -129,26 +196,63 @@ Where things live on Windows:
 - `%APPDATA%\Claude` — Personal account data. `%APPDATA%\Claude-Work` — Work data.
 - Startup shortcut `ClaudeRouterWatcher.lnk` — starts the watcher at each logon.
 
+### On Linux and macOS
+
+`claude-router.sh` has the same subcommands (`setup`, `handle`, `launch`, `watch`,
+`tag`, `register` / `unregister`, `status`, `uninstall`) and uses each OS's native
+building blocks:
+
+| Piece                     | Linux                                             | macOS                                                      |
+| ------------------------- | ------------------------------------------------- | ---------------------------------------------------------- |
+| Owns `claude://`          | `xdg-mime` default + a `claude-router.desktop`    | an AppleScript applet + `duti` / Launch Services           |
+| Account chooser           | `zenity` / `kdialog` (terminal fallback)          | `osascript` dialog                                         |
+| Per-account launcher      | a `.desktop` with a distinct `StartupWMClass` and its own PNG | a wrapper `.app` bundle carrying its own `.icns`  |
+| Separate identity at launch | `--class=ClaudeRouter-<name>` + `--user-data-dir` | `open -n` with `--user-data-dir` (per-account bundle icon) |
+| Self-heal watcher         | a background loop + a `~/.config/autostart` entry | a background loop + a `launchd` LaunchAgent (`KeepAlive`)   |
+| Auto-install Claude        | not available (no official Linux installer)      | downloads the official `.dmg` from `claude.ai`             |
+
+Login forwarding works the same way on every OS: each account runs with its own
+`--user-data-dir`, so relaunching that data dir with the callback URL hits Claude's
+own single-instance lock and hands the login to the already-open window.
+
+Where things live on Linux:
+
+- `~/.local/share/claude-router/` — the installed `claude-router.sh`, the icons,
+  and `router.log`.
+- `~/.config/Claude` — Personal data. `~/.config/Claude-Work` — Work data.
+- `~/.local/share/applications/claude-{Personal,Work}.desktop` — the launchers.
+- `~/.config/autostart/claude-router-watch.desktop` — starts the watcher at login.
+
+Where things live on macOS:
+
+- `~/Library/Application Support/claude-router/` — the installed script, the
+  wrapper `.app` launchers, the icons, and `router.log`.
+- `~/Library/Application Support/Claude` — Personal data. `…/Claude-Work` — Work data.
+- `~/Library/LaunchAgents/com.claudeswitch.watcher.plist` — the watcher LaunchAgent.
+
 ---
 
 ## Platform support
 
-| Platform    | Status         | Notes                                                                 |
-| ----------- | -------------- | --------------------------------------------------------------------- |
-| **Windows** | ✅ Proven       | The primary, end-to-end tested implementation (`src/ClaudeRouter.cs`).|
-| **Linux**   | 🧪 Experimental | Implemented in `src/claude-router.sh` (xdg-mime + `.desktop` handler, zenity/kdialog chooser). Untested — set `CLAUDE_BIN` to your Claude binary/AppImage. |
-| **macOS**   | 🧪 Experimental | Best-effort scaffold in `src/claude-router.sh`. Registering the handler needs `duti` (`brew install duti`); forwarding a `claude://` URL to a running app via Apple Events is the piece most likely to need rework. |
+| Platform    | Status                  | Notes                                                                 |
+| ----------- | ----------------------- | --------------------------------------------------------------------- |
+| **Windows** | ✅ Proven                | The primary, end-to-end tested implementation (`src/ClaudeRouter.cs`).|
+| **Linux**   | ✅ Full — best-effort UI | `src/claude-router.sh`: handler, chooser, per-account launchers with `StartupWMClass` grouping, and an autostart watcher. Per-account taskbar grouping needs a WM that honours `StartupWMClass` (most do). Claude must already be installed — set `CLAUDE_BIN` if it isn't on your `PATH`. |
+| **macOS**   | ✅ Full — best-effort UI | `src/claude-router.sh`: handler (needs `duti`), chooser, wrapper-`.app` launchers, a `launchd` watcher, and automatic download/install of Claude when absent. Each account launches with its own data dir; the wrapper carries a per-account icon (the Dock may still show Claude's own icon once Claude is frontmost). |
 
-The Bash port mirrors the Windows design but has **not** been tested on Linux or
-macOS. Treat the first real run as the test, and check `router.log` if a login
-doesn't complete. Reports and fixes are very welcome — see
+Every feature has a working implementation on all three platforms. The two items
+marked *best-effort* are the ones the OS doesn't let a helper control perfectly —
+per-account **window grouping** on Linux (WM-dependent) and per-account **Dock
+icons** on macOS — everything else (routing, the chooser, launchers, the self-heal
+watcher, uninstall) behaves the same everywhere. If a login doesn't complete,
+`router.log` records what each callback did. Reports and fixes are welcome — see
 [Contributing](#contributing).
 
 ```bash
-# Unix port (Linux/macOS)
-chmod +x src/claude-router.sh
+# Linux / macOS
+./install.sh                      # register + launchers + watcher (full setup)
 ./src/claude-router.sh status     # read-only report
-./src/claude-router.sh setup      # register + create the two launchers
+./uninstall.sh                    # remove everything (keeps your data)
 ```
 
 ---
@@ -172,10 +276,17 @@ and attach `router.log`.
 
 ## Uninstall
 
-Run **`uninstall.bat`**. It restores the default `claude://` handler, stops the
-watcher, and removes the shortcuts. Your login backups are kept under
-`%LOCALAPPDATA%\ClaudeRouter\session-backup-*`. To go back to a single app,
-reinstall the normal Claude from <https://claude.ai/download>.
+**Windows:** run **`uninstall.bat`**. It restores the default `claude://` handler,
+stops the watcher, and removes the shortcuts. Your login backups are kept under
+`%LOCALAPPDATA%\ClaudeRouter\session-backup-*`.
+
+**Linux / macOS:** run **`./uninstall.sh`**. It hands the `claude://` handler back,
+removes the per-account launchers, and stops and removes the watcher (the autostart
+entry on Linux, the LaunchAgent on macOS). Your account data and `router.log` are
+left untouched.
+
+To go back to a single app, open Claude once so it re-claims `claude://` (or
+reinstall it from <https://claude.ai/download>).
 
 ---
 
@@ -185,12 +296,18 @@ reinstall the normal Claude from <https://claude.ai/download>.
 claude-switch/
 ├── src/
 │   ├── ClaudeRouter.cs     # Windows implementation (the whole program)
-│   └── claude-router.sh    # Linux/macOS port (experimental)
+│   └── claude-router.sh    # Linux/macOS engine (full parity, best-effort UI)
 ├── assets/
-│   ├── Personal.ico        # taskbar color/icon for the Personal account
-│   └── Work.ico            # taskbar color/icon for the Work account
+│   ├── Personal.ico        # Windows taskbar icon — Personal account
+│   ├── Work.ico            # Windows taskbar icon — Work account
+│   ├── Personal.png        # Linux taskbar icon — Personal account
+│   ├── Work.png            # Linux taskbar icon — Work account
+│   ├── Personal.icns       # macOS Dock icon — Personal account
+│   └── Work.icns           # macOS Dock icon — Work account
 ├── build.bat               # Windows: compile + install (double-click)
 ├── uninstall.bat           # Windows: one-click removal
+├── install.sh              # Linux/macOS: one-command setup
+├── uninstall.sh            # Linux/macOS: one-command removal
 ├── LICENSE                 # MIT
 ├── README.md
 ├── CONTRIBUTING.md
@@ -214,10 +331,11 @@ and please review the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 
-This tool modifies the current user's registry (`HKCU`), downloads the official
-Claude installer when Claude is absent, and starts a background process at logon.
-It requires no admin rights and touches only per-user state. To report a
-vulnerability, see [SECURITY.md](SECURITY.md).
+This tool registers itself as the per-user `claude://` handler (the `HKCU`
+registry on Windows, `xdg-mime` on Linux, `duti` / Launch Services on macOS),
+downloads the official Claude installer when Claude is absent (Windows and macOS),
+and starts a background watcher at login. It requires no admin rights and touches
+only per-user state. To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## License
 

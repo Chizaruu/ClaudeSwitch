@@ -34,11 +34,30 @@ jobs:
           Write-Host "Build succeeded."
 
   shellcheck-unix:
-    name: ShellCheck (Unix port)
+    name: ShellCheck (Unix engine)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@master
         with:
-          scandir: ./src
+          # Lints src/claude-router.sh plus install.sh / uninstall.sh at the root.
+          scandir: .
+
+  syntax-unix:
+    name: Bash syntax (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse-check every shell script
+        shell: bash
+        run: |
+          echo "Using bash: $(bash --version | head -1)"
+          bash -n src/claude-router.sh
+          bash -n install.sh
+          bash -n uninstall.sh
+          echo "All scripts parse cleanly."
