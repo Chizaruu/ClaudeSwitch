@@ -23,11 +23,24 @@ jobs:
           - os: macos-latest
             rid: osx-arm64
     runs-on: ${{ matrix.os }}
+    env:
+      # Uniform, cacheable package location across all three runner OSes.
+      NUGET_PACKAGES: ${{ github.workspace }}/.nuget-packages
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+      # The restore is dominated by the NativeAOT toolchain — the ILCompiler and
+      # runtime packs are ~570 MB per RID and were re-downloaded every run.
+      # Cache them so only the first run (or a toolchain bump) pays that cost.
+      - name: Cache NuGet packages (incl. the NativeAOT toolchain)
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.nuget-packages
+          key: nuget-${{ runner.os }}-${{ matrix.rid }}-${{ hashFiles('src/**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-${{ matrix.rid }}-
       - name: NativeAOT publish
         run: dotnet publish src -c Release -r ${{ matrix.rid }}
       - name: Show the produced native binary
