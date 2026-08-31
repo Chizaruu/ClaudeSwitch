@@ -35,7 +35,10 @@ static class Config
 
     public static string DataDirFor(string account)
     {
-        string suffix = account == "Work" ? "-Work" : "";
+        // The PRIMARY account uses Claude's default profile ("Claude"); every other
+        // account gets a suffixed profile. On Windows only the default-profile
+        // account is Cowork-capable, so `Primary` is which account has Cowork.
+        string suffix = account == Primary ? "" : "-" + account;
         if (OperatingSystem.IsWindows())
             return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Claude" + suffix);
         if (OperatingSystem.IsMacOS())
@@ -60,6 +63,36 @@ static class Config
         File.Exists(InstalledEnginePath) ? InstalledEnginePath : (Environment.ProcessPath ?? InstalledEnginePath);
 
     public static bool IsAccount(string name) => Array.IndexOf(Accounts, name) >= 0;
+
+    // ---- primary (default-profile / Cowork-capable) account ----
+    public static string PrimaryFile => Path.Combine(RouterHome, "primary.txt");
+    static string? _primary;
+
+    /// <summary>Which account uses Claude's default profile; defaults to the first.</summary>
+    public static string Primary
+    {
+        get
+        {
+            if (_primary != null) return _primary;
+            try
+            {
+                if (File.Exists(PrimaryFile))
+                {
+                    string s = File.ReadAllText(PrimaryFile).Trim();
+                    if (IsAccount(s)) return _primary = s;
+                }
+            }
+            catch { }
+            return _primary = Accounts[0];
+        }
+    }
+
+    public static void SetPrimary(string account)
+    {
+        if (!IsAccount(account)) return;
+        try { Directory.CreateDirectory(RouterHome); File.WriteAllText(PrimaryFile, account); } catch { }
+        _primary = account;
+    }
 
     public static string Slug(string account) => "ClaudeRouter-" + account;
 

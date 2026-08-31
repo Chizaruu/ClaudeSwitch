@@ -17,16 +17,17 @@ sealed class Router
             case "register": _os.Register(); Console.WriteLine("Registered as the claude:// handler."); break;
             case "unregister": _os.Unregister(); Console.WriteLine("Handed the claude:// handler back."); break;
             case "setup":
-            case "install": return Setup();
+            case "install": return Setup(rest);
             case "uninstall": Uninstall(); break;
             case "launch": return Launch(Arg(rest, 0, "account name"));
             case "handle": return Handle(Arg(rest, 0, "url"));
             case "watch": Watch(); break;
             case "tag": _os.Tag(); Console.WriteLine("Re-asserted per-account launcher identity."); break;
+            case "primary": return SetPrimary(rest);
             case "test": Test(); break;
             default:
                 Console.Error.WriteLine($"Unknown command: {cmd}");
-                Console.Error.WriteLine("Commands: status register unregister setup install uninstall launch watch tag test handle");
+                Console.Error.WriteLine("Commands: status register unregister setup install uninstall launch watch tag primary test handle");
                 return 1;
         }
         return 0;
@@ -38,8 +39,14 @@ sealed class Router
         return rest[i];
     }
 
-    int Setup()
+    int Setup(string[] rest)
     {
+        // Optional: choose which account owns Claude's default profile (and thus
+        // gets Cowork on Windows): `setup --primary Work`.
+        for (int i = 0; i + 1 < rest.Length; i++)
+            if (rest[i] == "--primary" && Config.IsAccount(rest[i + 1]))
+                Config.SetPrimary(rest[i + 1]);
+
         Directory.CreateDirectory(Config.RouterHome);
         InstallEngineAndIcons();
         if (!_os.EnsureClaude()) return 1;
@@ -53,6 +60,27 @@ sealed class Router
         Console.WriteLine("  • Open your accounts from the 'Claude (Personal)' and 'Claude (Work)' launchers.");
         Console.WriteLine("  • Each account keeps its own data folder and its own taskbar/dock icon.");
         Console.WriteLine("  • At sign-in, pick the account in the small chooser.");
+        if (OperatingSystem.IsWindows())
+            Console.WriteLine($"  • Cowork works in the '{Config.Primary}' account (change with:  ClaudeRouter primary <account>).");
+        return 0;
+    }
+
+    // Choose which account owns Claude's default profile (and thus Cowork on
+    // Windows). Persisted; takes effect on the accounts' next launch.
+    int SetPrimary(string[] rest)
+    {
+        string name = Arg(rest, 0, "account name");
+        if (!Config.IsAccount(name))
+        {
+            Console.Error.WriteLine($"Unknown account: {name} (known: {string.Join(", ", Config.Accounts)})");
+            return 1;
+        }
+        Config.SetPrimary(name);
+        string msg = $"'{name}' now uses Claude's default profile — it's the Cowork-capable account.\\n\\n" +
+                     "Close and re-open both accounts for this to take effect. Note: the accounts' " +
+                     "profiles are reassigned, so you may need to sign in again.";
+        _os.Notify(msg);
+        Console.WriteLine($"Primary (Cowork) account set to '{name}'.");
         return 0;
     }
 
@@ -123,7 +151,7 @@ sealed class Router
         Console.WriteLine($"Router home : {Config.RouterHome}");
         Console.WriteLine($"Installed   : {(File.Exists(Config.InstalledEnginePath) ? "yes" : "no")}");
         foreach (var a in Config.Accounts)
-            Console.WriteLine($"{a,-8} dir : {Config.DataDirFor(a)}");
+            Console.WriteLine($"{a,-8} dir : {Config.DataDirFor(a)}{(a == Config.Primary ? "   [primary — Cowork]" : "")}");
         Console.WriteLine(_os.ClaudeLocationLine());
         Console.WriteLine($"claude:// handler : {_os.CurrentHandler() ?? "(none)"}");
         Console.WriteLine($"Handler is ours   : {(_os.HandlerIsOurs() ? "yes" : "no")}");

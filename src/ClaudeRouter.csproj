@@ -22,7 +22,7 @@
     <RootNamespace>ClaudeSwitch</RootNamespace>
 
     <!-- Single source of truth for the version; the Tag workflow tags v$(Version). -->
-    <Version>0.2.3</Version>
+    <Version>0.2.4</Version>
 
     <!-- NativeAOT: one small self-contained native binary per platform. -->
     <PublishAot>true</PublishAot>

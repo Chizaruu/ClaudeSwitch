@@ -141,6 +141,7 @@ Management commands — run the installed binary (`ClaudeRouter` /
 | `ClaudeRouter tag`             | Re-color / re-group the open windows now.      |
 | `ClaudeRouter register`        | Re-claim the `claude://` link for the router.  |
 | `ClaudeRouter launch Work`     | Open an account (also `Personal`).             |
+| `ClaudeRouter primary Work`    | Choose the Cowork account (Windows). See below.|
 | `ClaudeRouter test`            | Fire a harmless `claude://router-test` link.   |
 | `ClaudeRouter uninstall`       | Remove the handler, launchers and watcher.     |
 
@@ -232,22 +233,34 @@ and refuses to run against the older **Squirrel** install (`%LOCALAPPDATA%\Anthr
 This is a Claude Desktop requirement, independent of ClaudeSwitch, but it interacts
 with how ClaudeSwitch launches accounts:
 
-- ClaudeSwitch launches Claude with a per-account `--user-data-dir`. To keep Cowork
-  working it now launches Claude through its **MSIX app-execution alias**
-  (`…\WindowsApps\claude.exe`), so the process keeps its package identity — the
-  thing Cowork checks. `ClaudeRouter status` reports whether the Claude it found is
-  the MSIX build or a legacy one.
+- ClaudeSwitch launches Claude through its **MSIX app-execution alias**
+  (`…\WindowsApps\claude.exe`) so the process keeps its package identity — the thing
+  Cowork checks. `ClaudeRouter status` reports whether the Claude it found is MSIX or
+  a legacy build.
 - If your Claude is the **Squirrel** install, Cowork won't work in *any* window
   (ClaudeSwitch or not). Reinstall Claude with the modern installer from
   <https://claude.ai/download>.
 
-> **Best-effort, and honestly uncertain.** Whether a *second* MSIX Claude instance
-> launched with its own `--user-data-dir` keeps package identity — and therefore
-> lights up Cowork in both accounts — depends on Claude's MSIX packaging and hasn't
-> been confirmed. It may turn out that "two accounts" and "Cowork" can't both work
-> on Windows until Anthropic ships native multi-account support (the very gap this
-> tool exists to bridge). If Cowork stays greyed out in a ClaudeSwitch window,
-> that's the current limitation — use your primary MSIX Claude for Cowork.
+**Cowork works in one account — you choose which.** Testing confirmed that Cowork
+lights up in the account running Claude's **default profile** (`%APPDATA%\Claude`),
+not in the second account's separate profile — Cowork is bound to that one installed
+profile, and a parallel second profile can't get it. So on Windows you get **Cowork
+in one account plus a second account without it** (not both). Which account is the
+Cowork one is your choice:
+
+```
+ClaudeRouter primary Work      # make Work the default-profile / Cowork account
+ClaudeRouter setup --primary Work   # or choose it at setup time
+```
+
+By default the **Personal** account is the Cowork one. `ClaudeRouter status` marks
+the current pick as `[primary — Cowork]`.
+
+> Switching the primary reassigns which account uses the default profile, so after
+> changing it, close and re-open both accounts — and expect to sign in again, since
+> each account now points at a different profile. Pick your Cowork account **before**
+> signing in if you can. Getting Cowork in *both* accounts isn't possible until
+> Anthropic ships native multi-account support — the gap this tool bridges.
 
 ## Troubleshooting
 

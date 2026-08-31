@@ -67,6 +67,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   was the exact install Cowork rejects) — it now points at the modern installer.
   Whether a *second* MSIX instance with its own data dir keeps identity is unverified;
   see the README's "Cowork & the modern installer".
+- **Choose the Cowork account** (`ClaudeRouter primary <account>`, or `setup
+  --primary <account>`): testing showed Cowork works only in the account on Claude's
+  default profile, so which account that is is now a persisted, switchable choice
+  (default: Personal). `status` marks it `[primary — Cowork]`. Getting Cowork in both
+  accounts at once isn't possible — it's bound to the single default profile.
 - CI builds the NativeAOT binary on Windows, macOS and Linux runners; README,
   CONTRIBUTING and the platform-support table rewritten around the single app, with
   the two inherently best-effort UI details (Linux window grouping, macOS Dock
