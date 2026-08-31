@@ -54,6 +54,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Windows and the `.dbg` on Unix.
 - Windows is now distributed as a **prebuilt MSI** (a deliberate, Windows-only
   reversal of the source-only policy); macOS and Linux still build from source.
+
+### Fixed
+- No more console window flashing on Windows when opening an account (or on a
+  `claude://` login callback): the app is built as `WinExe` (GUI subsystem) so the
+  shortcut-launched `launch`/`handle` commands run without allocating a console.
 - CI builds the NativeAOT binary on Windows, macOS and Linux runners; README,
   CONTRIBUTING and the platform-support table rewritten around the single app, with
   the two inherently best-effort UI details (Linux window grouping, macOS Dock
